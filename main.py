@@ -1,4 +1,5 @@
 import asyncio
+import os
 import config
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
@@ -6,7 +7,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from pyrogram import Client
 from db import db
 from keep_alive import keep_alive
 
@@ -15,10 +15,9 @@ class BotStates(StatesGroup):
     waiting_for_phone = State()
     waiting_for_otp = State()
 
+# Bot Setup
 bot = Bot(token=config.BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
-
-# Temporary storage
 login_clients = {}
 
 def get_main_menu():
@@ -34,13 +33,15 @@ async def cmd_start(message: types.Message):
 
 @dp.callback_query(F.data == "add_acc")
 async def start_add_acc(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.answer("Enter Phone Number (with code, e.g., +919876543210):")
+    await callback.message.answer("Enter Phone Number (+91xxxxxxxxx):")
     await state.set_state(BotStates.waiting_for_phone)
 
 @dp.message(BotStates.waiting_for_phone)
 async def get_otp(message: types.Message, state: FSMContext):
+    # LAZY IMPORT: Pyrogram yahan import hoga, main start par nahi
+    from pyrogram import Client
+    
     phone = message.text
-    # Yahan hum async context ke andar client bana rahe hain
     app = Client(f"session_{message.from_user.id}", api_id=config.API_ID, api_hash=config.API_HASH, in_memory=True)
     
     await app.start()
@@ -55,6 +56,9 @@ async def get_otp(message: types.Message, state: FSMContext):
 
 @dp.message(BotStates.waiting_for_otp)
 async def save_account(message: types.Message, state: FSMContext):
+    # LAZY IMPORT: Yahan bhi
+    from pyrogram import Client
+    
     otp = message.text
     data = login_clients.get(message.from_user.id)
     if not data:
@@ -78,7 +82,7 @@ async def save_account(message: types.Message, state: FSMContext):
 
 async def main():
     await db.connect()
-    keep_alive()
+    keep_alive() # Web server chalu
     print("Bot is running...")
     await dp.start_polling(bot)
 
