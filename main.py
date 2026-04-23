@@ -1,22 +1,19 @@
 import asyncio
 from aiogram import Bot, Dispatcher
 import config
-from database import get_pool
-from keep_alive import keep_alive  # <--- Ye line add ki hai
+from keep_alive import keep_alive
 
-# Bot aur Dispatcher setup
+# Bot setup
 bot = Bot(token=config.BOT_TOKEN)
 dp = Dispatcher()
 
 async def main():
-    # Render ke liye dummy web server start karna (zaroori hai)
-    keep_alive() 
+    # Server start taaki Render port detect kar sake
+    keep_alive()
+    print("Bot is starting up...")
     
-    print("Bot is starting...")
-    
-    # Bot polling shuru
+    # Polling start
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    # Event loop run karna
     asyncio.run(main())
