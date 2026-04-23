@@ -3,3 +3,4 @@ pyrogram
 tgcrypto
 asyncpg
 python-dotenv
+flask
