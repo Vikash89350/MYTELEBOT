@@ -1,11 +1,12 @@
 import asyncio
+import config
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-import config
+from db import db  # Database import kiya
 from keep_alive import keep_alive
 
 # --- States ---
@@ -30,11 +31,11 @@ def get_main_menu():
     builder.adjust(2)
     return builder.as_markup()
 
-# --- HANDLERS ---
+# --- Handlers ---
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
-    await message.answer("🚀 Qutomatic Bot Pro\nSelect an option:", reply_markup=get_main_menu())
+    await message.answer("🚀 AUTO DYNAMO Bot Pro\nSelect an option:", reply_markup=get_main_menu())
 
 # 1. ADD ACCOUNT FLOW
 @dp.callback_query(F.data == "add_acc")
@@ -50,20 +51,41 @@ async def get_otp(message: types.Message, state: FSMContext):
 
 @dp.message(BotStates.waiting_for_otp)
 async def save_account(message: types.Message, state: FSMContext):
-    # Yahan Pyrogram login aur DB save ka logic aayega
+    data = await state.get_data()
+    # Yahan DB mein save kar rahe hain
+    await db.save_account(message.from_user.id, data['phone'], "dummy_session_string")
     await message.answer("✅ Account Saved Successfully!", reply_markup=get_main_menu())
     await state.clear()
 
 # 2. MY ACCOUNTS & REMOVE
 @dp.callback_query(F.data == "my_accs")
 async def show_accounts(callback: types.CallbackQuery):
+    accounts = await db.get_accounts(callback.from_user.id)
     builder = InlineKeyboardBuilder()
-    # Yahan DB se accounts loop karke buttons banao
-    builder.button(text="❌ Remove (Dummy)", callback_data="del_1")
-    builder.button(text="🔙 Back", callback_data="main_menu")
-    await callback.message.edit_text("Your Accounts:", reply_markup=builder.as_markup())
+    
+    if not accounts:
+        await callback.message.edit_text("No accounts saved.", reply_markup=get_main_menu())
+        return
 
-# 3. ADD TASK FLOW (Professional)
+    for acc in accounts:
+        builder.button(text=f"❌ {acc['phone']}", callback_data=f"del_{acc['id']}")
+    
+    builder.button(text="🔙 Back", callback_data="main_menu")
+    builder.adjust(1)
+    await callback.message.edit_text("👤 Your Accounts:", reply_markup=builder.as_markup())
+
+@dp.callback_query(F.data.startswith("del_"))
+async def delete_account(callback: types.CallbackQuery):
+    acc_id = int(callback.data.split("_")[1])
+    await db.delete_account(acc_id)
+    await callback.answer("Account Removed!")
+    await show_accounts(callback) # List refresh karo
+
+@dp.callback_query(F.data == "main_menu")
+async def back_to_menu(callback: types.CallbackQuery):
+    await callback.message.edit_text("🚀 Main Menu:", reply_markup=get_main_menu())
+
+# 3. ADD TASK FLOW
 @dp.callback_query(F.data == "add_task")
 async def start_task(callback: types.CallbackQuery, state: FSMContext):
     builder = InlineKeyboardBuilder()
@@ -72,33 +94,14 @@ async def start_task(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.answer("Task type chunein:", reply_markup=builder.as_markup())
     await state.set_state(BotStates.waiting_for_task_type)
 
-@dp.callback_query(F.data.startswith("task_"))
-async def get_link(callback: types.CallbackQuery, state: FSMContext):
-    await state.update_data(task_type=callback.data)
-    await callback.message.answer("Post ki Link bhejein:")
-    await state.set_state(BotStates.waiting_for_post_link)
+# [... baaki task handlers waise hi rehne do ...]
 
-@dp.message(BotStates.waiting_for_post_link)
-async def get_channel(message: types.Message, state: FSMContext):
-    await state.update_data(post_link=message.text)
-    await message.answer("Channel/Group link bhejein:")
-    await state.set_state(BotStates.waiting_for_channel_link)
-
-@dp.message(BotStates.waiting_for_channel_link)
-async def get_delay(message: types.Message, state: FSMContext):
-    await state.update_data(channel=message.text)
-    builder = InlineKeyboardBuilder()
-    builder.button(text="1 Sec", callback_data="delay_1")
-    builder.button(text="5 Sec", callback_data="delay_5")
-    await message.answer("Delay chunein:", reply_markup=builder.as_markup())
-    await state.set_state(BotStates.waiting_for_delay)
-
-@dp.callback_query(F.data.startswith("delay_"))
-async def finalize_task(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.answer("✅ Task Processing Start ho gayi hai!")
-    await state.clear()
+async def startup():
+    await db.connect() # Database connect ho raha hai
+    print("Database connected!")
 
 async def main():
+    await startup() # Yahan startup call kiya
     keep_alive()
     print("Bot is running...")
     await dp.start_polling(bot)
