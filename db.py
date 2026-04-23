@@ -1,7 +1,6 @@
 import os
 import asyncpg
 
-# Render ke environment variable se connection string uthayega
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 class Database:
@@ -9,14 +8,17 @@ class Database:
         self.pool = None
 
     async def connect(self):
-        """Database se connect karega aur Tables banayega."""
         if not self.pool:
-            self.pool = await asyncpg.create_pool(DATABASE_URL)
-            print("✅ Database Connected Successfully!")
-            await self.setup_tables()
+            try:
+                # ssl=True add kiya hai, URL parameter ki zaroorat nahi
+                self.pool = await asyncpg.create_pool(DATABASE_URL, ssl=True)
+                print("✅ Database Connected Successfully!")
+                await self.setup_tables()
+            except Exception as e:
+                print(f"❌ Database Connection Error: {e}")
+                raise e
 
     async def setup_tables(self):
-        """Agar table nahi hai, toh create karega."""
         query = """
         CREATE TABLE IF NOT EXISTS accounts (
             id SERIAL PRIMARY KEY,
@@ -44,5 +46,4 @@ class Database:
         async with self.pool.acquire() as conn:
             await conn.execute("DELETE FROM accounts WHERE id = $1", account_id)
 
-# Bot mein import karne ke liye
 db = Database()
