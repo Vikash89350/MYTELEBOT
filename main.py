@@ -14,7 +14,6 @@ class States(StatesGroup):
     add_method = State()
     phone = State()
     otp = State()
-    session_str = State()
     task_type = State()
     task_post = State()
     task_channel = State()
@@ -26,26 +25,19 @@ async def start(msg: types.Message):
     kb.button(text="➕ Add Account", callback_data="add_acc")
     kb.button(text="👤 My Accounts", callback_data="my_accs")
     kb.button(text="📝 Add Task", callback_data="add_task")
+    kb.button(text="📋 My Tasks", callback_data="my_tasks")
     kb.adjust(2)
-    await msg.answer("✅ Main Menu:", reply_markup=kb.as_markup())
+    await msg.answer("🚀 Menu:", reply_markup=kb.as_markup())
 
 # --- LOGIN FLOW ---
 @dp.callback_query(F.data == "add_acc")
-async def add_acc_method(call: types.CallbackQuery, state: FSMContext):
-    kb = InlineKeyboardBuilder()
-    kb.button(text="Phone+OTP", callback_data="login_phone")
-    kb.button(text="Session String", callback_data="login_session")
-    await call.message.answer("Select Method:", reply_markup=kb.as_markup())
-    await state.set_state(States.add_method)
-
-@dp.callback_query(F.data == "login_phone")
-async def ask_phone(call: types.CallbackQuery, state: FSMContext):
-    await call.message.answer("Send Phone (+91...):")
+async def add_acc(call: types.CallbackQuery, state: FSMContext):
+    await call.message.answer("Enter Phone Number:")
     await state.set_state(States.phone)
 
 @dp.message(States.phone)
 async def process_phone(msg: types.Message, state: FSMContext):
-    app = Client("temp_login", api_id=config.API_ID, api_hash=config.API_HASH, in_memory=True)
+    app = Client(f"tmp_{msg.from_user.id}", api_id=config.API_ID, api_hash=config.API_HASH, in_memory=True)
     await app.start()
     code = await app.send_code(msg.text)
     login_store[msg.from_user.id] = {"app": app, "phone": msg.text, "hash": code.phone_code_hash}
@@ -62,25 +54,33 @@ async def process_otp(msg: types.Message, state: FSMContext):
     await data["app"].stop()
     await state.clear()
 
+# --- MY ACCOUNTS ---
+@dp.callback_query(F.data == "my_accs")
+async def show_accs(call: types.CallbackQuery):
+    accs = await db.get_accounts(call.from_user.id)
+    if not accs: return await call.message.answer("No accounts.")
+    for p, s in accs:
+        await call.message.answer(f"📱 {p}")
+
 # --- TASK FLOW ---
 @dp.callback_query(F.data == "add_task")
-async def add_task(call: types.CallbackQuery, state: FSMContext):
+async def ask_task(call: types.CallbackQuery, state: FSMContext):
     kb = InlineKeyboardBuilder()
     kb.button(text="Vote", callback_data="task_vote")
     kb.button(text="Reaction", callback_data="task_react")
-    await call.message.answer("Select Task:", reply_markup=kb.as_markup())
+    await call.message.answer("Select:", reply_markup=kb.as_markup())
     await state.set_state(States.task_type)
 
 @dp.callback_query(F.data.startswith("task_"))
-async def task_steps(call: types.CallbackQuery, state: FSMContext):
+async def get_task_info(call: types.CallbackQuery, state: FSMContext):
     await state.update_data(type=call.data.split("_")[1])
     await call.message.answer("Send Post Link:")
     await state.set_state(States.task_post)
 
 @dp.message(States.task_post)
 async def get_link(msg: types.Message, state: FSMContext):
-    await state.update_data(post=msg.text)
-    await msg.answer("Send Channel/Group Link:")
+    await state.update_data(link=msg.text)
+    await msg.answer("Send Channel Link:")
     await state.set_state(States.task_channel)
 
 @dp.message(States.task_channel)
@@ -89,28 +89,18 @@ async def get_channel(msg: types.Message, state: FSMContext):
     if data['type'] == 'react':
         await msg.answer("Send Emoji:")
         await state.set_state(States.task_emoji)
-        await state.update_data(channel=msg.text)
+        await state.update_data(chan=msg.text)
     else:
-        await execute(msg.from_user.id, data['type'], data['post'], msg.text, None)
-        await msg.answer("✅ Task Executed!")
+        await db.save_task(msg.from_user.id, data['type'], data['link'], msg.text, None)
+        await msg.answer("✅ Task Saved!")
         await state.clear()
 
 @dp.message(States.task_emoji)
-async def final_react(msg: types.Message, state: FSMContext):
+async def final_emoji(msg: types.Message, state: FSMContext):
     data = await state.get_data()
-    await execute(msg.from_user.id, data['type'], data['post'], data['channel'], msg.text)
-    await msg.answer("✅ Task Executed!")
+    await db.save_task(msg.from_user.id, data['type'], data['link'], data['chan'], msg.text)
+    await msg.answer("✅ Task Saved!")
     await state.clear()
-
-async def execute(uid, t_type, link, chan, emoji):
-    accounts = await db.get_accounts(uid)
-    for phone, session in accounts:
-        async with Client(f"acc_{phone}", api_id=config.API_ID, api_hash=config.API_HASH, session_string=session) as app:
-            await app.join_chat(chan)
-            # Yahan logic hai execution ka
-            msg_id = int(link.split('/')[-1])
-            if t_type == 'react':
-                await app.send_reaction(chan, msg_id, emoji=emoji)
 
 async def main():
     await db.init_db()
