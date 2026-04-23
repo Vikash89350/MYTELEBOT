@@ -9,17 +9,15 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from db import db
 from keep_alive import keep_alive
 
-# --- States ---
+# States
 class BotStates(StatesGroup):
     waiting_for_phone = State()
     waiting_for_otp = State()
-    waiting_for_task = State()
 
 bot = Bot(token=config.BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 login_clients = {}
 
-# --- Menu ---
 def get_main_menu():
     builder = InlineKeyboardBuilder()
     builder.button(text="➕ Add Account", callback_data="add_acc")
@@ -31,33 +29,43 @@ def get_main_menu():
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
+    print("LOG: Start command received")
     await message.answer("🚀 Bot Menu:", reply_markup=get_main_menu())
 
-# --- LOGIN FLOW ---
 @dp.callback_query(F.data == "add_acc")
 async def start_add_acc(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.answer("Enter Phone Number (+91xxxxxxxxx):")
+    print("LOG: User clicked Add Account")
+    await callback.message.answer("Enter Phone Number (with +91, e.g., +919876543210):")
     await state.set_state(BotStates.waiting_for_phone)
 
 @dp.message(BotStates.waiting_for_phone)
 async def get_otp(message: types.Message, state: FSMContext):
+    print(f"LOG: Received phone number: {message.text}")
     from pyrogram import Client
+    
     phone = message.text
-    # Session name unique rakho
+    # Session name unique
     app = Client(f"session_{message.from_user.id}", api_id=config.API_ID, api_hash=config.API_HASH, in_memory=True)
     
-    await app.start()
     try:
+        print("LOG: Starting client...")
+        await app.start()
+        print("LOG: Client started. Sending code...")
         sent_code = await app.send_code(phone)
+        
         login_clients[message.from_user.id] = {"app": app, "phone": phone, "hash": sent_code.phone_code_hash}
         await message.answer("✅ OTP sent! Enter OTP:")
         await state.set_state(BotStates.waiting_for_otp)
+        print("LOG: OTP Sent success")
     except Exception as e:
-        await app.stop()
+        print(f"ERROR: {e}")
         await message.answer(f"❌ Error: {e}")
 
 @dp.message(BotStates.waiting_for_otp)
 async def save_account(message: types.Message, state: FSMContext):
+    print(f"LOG: Received OTP: {message.text}")
+    from pyrogram import Client
+    
     otp = message.text
     data = login_clients.get(message.from_user.id)
     if not data:
@@ -68,49 +76,22 @@ async def save_account(message: types.Message, state: FSMContext):
     try:
         await app.sign_in(data["phone"], data["hash"], otp)
         session_string = await app.export_session_string()
-        # Save to DB
         await db.save_account(message.from_user.id, data["phone"], session_string)
         
-        await message.answer("🎉 Account Logged In & Saved!")
+        await message.answer("🎉 Account Logged In!")
         await app.stop()
         del login_clients[message.from_user.id]
         await state.clear()
+        print("LOG: Account saved")
     except Exception as e:
-        await app.stop()
+        print(f"ERROR: {e}")
         await message.answer(f"❌ Login Failed: {e}")
         await state.clear()
-
-# --- TASK FLOW ---
-@dp.callback_query(F.data == "add_task")
-async def ask_task(callback: types.CallbackQuery, state: FSMContext):
-    # Check if user has account
-    acc = await db.get_account(callback.from_user.id)
-    if not acc:
-        await callback.message.answer("⚠️ Please Add Account first!")
-        return
-    await callback.message.answer("Enter your task details:")
-    await state.set_state(BotStates.waiting_for_task)
-
-@dp.message(BotStates.waiting_for_task)
-async def save_task(message: types.Message, state: FSMContext):
-    task = message.text
-    await db.save_task(message.from_user.id, task)
-    await message.answer("✅ Task Saved!")
-    await state.clear()
-
-@dp.callback_query(F.data == "my_tasks")
-async def show_tasks(callback: types.CallbackQuery):
-    tasks = await db.get_tasks(callback.from_user.id)
-    if not tasks:
-        await callback.message.answer("No tasks found.")
-    else:
-        text = "\n".join([f"- {t}" for t in tasks])
-        await callback.message.answer(f"📋 Your Tasks:\n{text}")
 
 async def main():
     await db.connect()
     keep_alive()
-    print("Bot is running...")
+    print("Bot is fully running...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
