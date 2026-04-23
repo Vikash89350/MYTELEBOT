@@ -1,16 +1,16 @@
-import os
 from flask import Flask
 from threading import Thread
+import os
 
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot is active and running!"
+    return "Bot is alive!"
 
 def run():
-    # Render jo port dega, ye wahi use karega
-    port = int(os.environ.get("PORT", 8080))
+    # Render ke liye zaroori hai ki hum PORT environment variable use karein
+    port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
