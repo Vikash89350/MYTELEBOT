@@ -3,17 +3,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Safely get variables
+# Variables load karo
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 API_HASH = os.getenv("API_HASH")
 
-# API_ID ko safely handle karo
+# API_ID ko safely handle karo (Ye crash nahi karega)
 raw_api_id = os.getenv("API_ID")
-if raw_api_id:
-    API_ID = int(raw_api_id)
-else:
-    API_ID = 0  # Default value
-    print("⚠️ WARNING: API_ID not found in Environment Variables!")
+try:
+    API_ID = int(raw_api_id) if raw_api_id else 0
+except:
+    API_ID = 0
+    print("⚠️ ERROR: API_ID is not a valid number in Environment Variables!")
 
-print(f"DEBUG: Loaded API_ID = {API_ID}") # Isse log mein dikh jayega kya load hua
+print(f"DEBUG: Config Loaded -> BOT_TOKEN={'Yes' if BOT_TOKEN else 'No'}, API_ID={API_ID}")
