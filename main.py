@@ -1,4 +1,6 @@
+print("DEBUG: main.py file load hona shuru ho gaya hai!")
 import asyncio
+# ... baaki code ...import asyncio
 import config
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
