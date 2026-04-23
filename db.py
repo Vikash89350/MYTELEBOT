@@ -26,3 +26,8 @@ async def save_task(user_id, t_type, link, channel, emoji):
         await db.execute("INSERT INTO tasks (user_id, type, link, channel, emoji, status) VALUES (?, ?, ?, ?, ?, ?)", 
                          (user_id, t_type, link, channel, emoji, "Pending"))
         await db.commit()
+
+async def get_user_tasks(user_id):
+    async with aiosqlite.connect("bot.db") as db:
+        async with db.execute("SELECT id, type, link, status FROM tasks WHERE user_id = ?", (user_id,)) as cursor:
+            return await cursor.fetchall()
