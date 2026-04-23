@@ -21,13 +21,8 @@ async def delete_account(user_id, phone):
         await db.execute("DELETE FROM accounts WHERE user_id = ? AND phone = ?", (user_id, phone))
         await db.commit()
 
-async def save_task(user_id, type, link, channel, emoji, status="Pending"):
+async def save_task(user_id, t_type, link, channel, emoji):
     async with aiosqlite.connect("bot.db") as db:
         await db.execute("INSERT INTO tasks (user_id, type, link, channel, emoji, status) VALUES (?, ?, ?, ?, ?, ?)", 
-                         (user_id, type, link, channel, emoji, status))
+                         (user_id, t_type, link, channel, emoji, "Pending"))
         await db.commit()
-
-async def get_tasks(user_id):
-    async with aiosqlite.connect("bot.db") as db:
-        async with db.execute("SELECT id, type, link, status FROM tasks WHERE user_id = ?", (user_id,)) as cursor:
-            return await cursor.fetchall()
