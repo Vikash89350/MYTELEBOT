@@ -1,7 +1,6 @@
 aiogram
 pyrogram
 tgcrypto
-asyncpg
-python-dotenv
+aiosqlite
 flask
 gunicorn
