@@ -9,8 +9,8 @@ def home():
     return "Bot is alive!"
 
 def run():
-    # Render ke liye zaroori hai ki hum PORT environment variable use karein
-    port = int(os.environ.get('PORT', 5000))
+    # Render jo port deta hai, wahi use karna zaroori hai
+    port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
